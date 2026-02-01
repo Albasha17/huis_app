@@ -156,7 +156,7 @@ if finale_vraag:
     else:
         with st.spinner('Contact maken met het huis...'):
             try:
-                model = genai.GenerativeModel('models/gemini-2.5-flash'
+                model = genai.GenerativeModel('models/gemini-2.5-flash')
                 prompt = f"""
                 Je bent de huisgids. Gebruik deze database:
                 {huis_informatie}

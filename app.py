@@ -40,8 +40,15 @@ st.title("🏠 Welkom Thuis")
 # ... de rest van je app ...
 
 # --- CONFIGURATIE ---
-api_key = "PLAK_HIER_JE_GOOGLE_AI_KEY" # Of zet deze ook in je secrets.toml!
-sheet_naam = "Huisgids Database" # <--- De EXACTE bestandsnaam van je Google Sheet
+# We halen de API key nu veilig uit de secrets (zowel lokaal als online)
+try:
+    api_key = st.secrets["google_api_key"]
+except KeyError:
+    st.error("⚠️ Je bent de 'google_api_key' vergeten in je Secrets te zetten!")
+    st.stop()
+
+# De naam van je sheet
+sheet_naam = "huisgids_db"
 
 # --- SETUP GOOGLE SHEETS API ---
 # We halen de inloggegevens veilig uit st.secrets

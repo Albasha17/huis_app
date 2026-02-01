@@ -152,7 +152,7 @@ if finale_vraag:
     with st.spinner('Handleidingen raadplegen...'):
         response_text = ""
         
-        # We bouwen een slimme prompt die vraagt om uitgebreide stappenplannen
+        # We bouwen een slimme prompt
         prompt = f"""
         Je bent de pro-actieve huisgids. Gebruik de database hieronder.
         
@@ -161,39 +161,39 @@ if finale_vraag:
         
         VRAAG VAN GAST: {finale_vraag}
         
-        INSTRUCTIES VOOR JOUW ANTWOORD:
-        1. Identificatie: Kijk eerst of de vraag over een apparaat gaat dat in de lijst staat. Zo ja, zoek het Merk en Model erbij.
-        2. Handleiding Kennis: Als het een "Hoe werkt dit?" of "Probleem" vraag is:
-           - Gebruik jouw algemene AI-kennis van dit specifieke merk en model.
-           - Geef een duidelijk STAPPENPLAN (Stap 1, Stap 2, etc.) hoe het werkt. Wees heel praktisch.
-        3. YouTube Link: Als het over een apparaat gaat, genereer dan ONDERAAN je antwoord een YouTube zoek-link in dit formaat:
-           "🎥 [Bekijk instructievideo op YouTube](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
-           (Vul MERK, MODEL en ONDERWERP zelf in op basis van de vraag).
-        4. Locaties: Als het over restaurants gaat, toon ALTIJD de Google Maps link als die in de data staat.
-        5. Wees vriendelijk.
+        INSTRUCTIES:
+        1. Identificatie: Kijk of het apparaat in de lijst staat (Merk & Model).
+        2. Handleiding: Geef een STAPPENPLAN als gevraagd.
+        3. YouTube: Genereer een zoek-link onderaan: "🎥 [Video](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
+        4. Maps: Toon Maps links voor locaties.
         """
 
+        # POGING 1: Het snelle, nieuwe model
         try:
-            # Probeer eerst het nieuwste model
-            model = genai.GenerativeModel('gemini-1.5-flash') # Of 2.0-flash als beschikbaar
+            # Let op: ik heb hier 1.5-flash gezet, want 2.5 bestaat nog niet!
+            model = genai.GenerativeModel('gemini-1.5-flash') 
             inputs = [prompt, image] if image else [prompt]
             response = model.generate_content(inputs)
             response_text = response.text
             
         except Exception as e:
+            # POGING 2: De Fallback (als poging 1 mislukt)
             try:
-                # Fallback naar Pro
+                # We proberen het oudere, stabiele model
+                # st.warning(f"Even overschakelen naar backup... (Fout was: {e})")
                 model = genai.GenerativeModel('gemini-pro')
                 response = model.generate_content(prompt)
                 response_text = response.text
-        except Exception as e2:
-                st.error(f"De echte foutmelding is: {e2}")
+            except Exception as e2:
+                # HIER ging het mis in je vorige poging.
+                # Nu laten we de echte fout zien:
+                st.error(f"Helaas, beide modellen falen. De foutmelding is: {e2}")
         
         if response_text:
             st.markdown("### Antwoord:")
             st.info(response_text)
 
-# Debug
+# Debug venster (laat dit staan om je Sheets verbinding te checken)
 with st.expander("🔧 Beheerder: Check verbinding", expanded=False):
     if "Fout" in huis_informatie:
         st.error(f"🚨 Verbinding mislukt met '{SHEET_NAAM}'.")

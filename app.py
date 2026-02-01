@@ -120,8 +120,18 @@ try:
 except:
     pass
 
-# Data Laden
+# Laad de data
 huis_informatie, has_wifi, has_cats, has_food = load_house_data()
+
+# --- NIEUW: DEBUG VENSTER (Om te testen) ---
+with st.expander("🔧 Klik hier om te zien wat de AI leest (Debug Info)"):
+    if "Fout" in huis_informatie:
+        st.error("🚨 Er is een verbindingsfout!")
+    else:
+        st.success("✅ Verbinding geslaagd")
+    
+    st.text(f"Gevonden tekst lengte: {len(huis_informatie)} tekens")
+    st.code(huis_informatie) # Dit toont de ruwe tekst die naar de AI gaat
 
 # --- DE UI (VOORKANT) ---
 col1, col2 = st.columns([1, 5])

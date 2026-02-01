@@ -149,54 +149,50 @@ finale_vraag = vraag_van_knop if vraag_van_knop else vraag_input
 
 # --- AI ANTWOORD GENERATOR ---
 if finale_vraag:
-    with st.spinner('Handleidingen raadplegen...'):
+    with st.spinner('Even nadenken...'):
         response_text = ""
         
-        # We bouwen een slimme prompt
+        # De instructie voor de AI
         prompt = f"""
-        Je bent de pro-actieve huisgids. Gebruik de database hieronder.
-        
-        DATABASE MET APPARATEN EN REGELS:
+        Je bent de huisgids. Gebruik deze database:
         {huis_informatie}
         
-        VRAAG VAN GAST: {finale_vraag}
+        VRAAG: {finale_vraag}
         
         INSTRUCTIES:
-        1. Identificatie: Kijk of het apparaat in de lijst staat (Merk & Model).
-        2. Handleiding: Geef een STAPPENPLAN als gevraagd.
-        3. YouTube: Genereer een zoek-link onderaan: "🎥 [Video](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
-        4. Maps: Toon Maps links voor locaties.
+        1. Zoek in de database naar antwoorden.
+        2. Als het over een apparaat gaat (Merk+Model gevonden): Leg stap-voor-stap uit hoe het werkt.
+        3. YouTube: Zet onderaan een link: "🎥 [Video Instructie](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
+        4. Maps: Geef altijd Google Maps links als die er zijn.
         """
 
-        # POGING 1: Het snelle, nieuwe model
+        # POGING 1: Jouw specifieke model (2.5)
         try:
-            # Let op: ik heb hier 1.5-flash gezet, want 2.5 bestaat nog niet!
-            model = genai.GenerativeModel('gemini-1.5-flash') 
+            model = genai.GenerativeModel('models/gemini-2.5-flash')
             inputs = [prompt, image] if image else [prompt]
             response = model.generate_content(inputs)
             response_text = response.text
             
         except Exception as e:
-            # POGING 2: De Fallback (als poging 1 mislukt)
+            # POGING 2: Fallback (als 2.5 niet werkt, pakken we 1.5)
             try:
-                # We proberen het oudere, stabiele model
-                # st.warning(f"Even overschakelen naar backup... (Fout was: {e})")
-                model = genai.GenerativeModel('gemini-pro')
-                response = model.generate_content(prompt)
+                # st.warning(f"Model 2.5 niet beschikbaar ({e}), ik schakel over naar 1.5.")
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                inputs = [prompt, image] if image else [prompt]
+                response = model.generate_content(inputs)
                 response_text = response.text
             except Exception as e2:
-                # HIER ging het mis in je vorige poging.
-                # Nu laten we de echte fout zien:
-                st.error(f"Helaas, beide modellen falen. De foutmelding is: {e2}")
+                # Als alles mislukt, toon de echte foutmelding
+                st.error(f"Er ging iets mis. Detail foutmelding: {e2}")
         
         if response_text:
             st.markdown("### Antwoord:")
             st.info(response_text)
 
-# Debug venster (laat dit staan om je Sheets verbinding te checken)
-with st.expander("🔧 Beheerder: Check verbinding", expanded=False):
+# Debug venster (om te checken of je Sheet werkt)
+with st.expander("🔧 Beheerder: Status Verbinding", expanded=False):
     if "Fout" in huis_informatie:
-        st.error(f"🚨 Verbinding mislukt met '{SHEET_NAAM}'.")
+        st.error(f"🚨 Verbinding met Sheet '{SHEET_NAAM}' mislukt.")
         st.code(huis_informatie)
     else:
-        st.success(f"✅ Verbinding met '{SHEET_NAAM}' is goed!")
+        st.success(f"✅ Verbinding met '{SHEET_NAAM}' is in orde.")

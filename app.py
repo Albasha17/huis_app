@@ -12,7 +12,7 @@ try:
     api_key = st.secrets["google_api_key"]
     # We gebruiken de Google Sheets API JSON
     creds_dict = st.secrets["gcp_service_account"]
-    sheet_naam = "Huisgids Database" 
+    sheet_naam = "huisgids_db" 
 except KeyError:
     st.error("⚠️ Er ontbreken sleutels in je Secrets (google_api_key of gcp_service_account).")
     st.stop()

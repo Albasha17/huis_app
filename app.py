@@ -190,7 +190,7 @@ if finale_vraag:
         
         # PROBEER 1: Het snelle model (Flash)
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('models/gemini-2.5-flash')
             prompt = f"""Je bent de huisgids. Info: {huis_informatie}. Vraag: {finale_vraag}. Wees kort, vriendelijk en gebruik Maps links indien beschikbaar."""
             inputs = [prompt, image] if image else [prompt]
             response = model.generate_content(inputs)

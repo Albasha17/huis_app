@@ -186,8 +186,8 @@ if finale_vraag:
                 model = genai.GenerativeModel('gemini-pro')
                 response = model.generate_content(prompt)
                 response_text = response.text
-            except Exception as e2:
-                st.error("Technische fout. Probeer het later nog eens.")
+        except Exception as e2:
+                st.error(f"De echte foutmelding is: {e2}")
         
         if response_text:
             st.markdown("### Antwoord:")

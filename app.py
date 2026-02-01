@@ -4,23 +4,24 @@ from PIL import Image
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import time
+import urllib.parse # Nodig voor de YouTube links
 
 # --- CONFIGURATIE ---
+SHEET_NAAM = "huisgids_db"
+MODEL_NAAM = "models/gemini-2.0-flash" # Even geupdate naar 2.0 (is nieuwer/sneller), of gebruik 1.5
+
 # Haal geheime sleutels uit de kluis
 try:
     api_key = st.secrets["google_api_key"]
-    # We gebruiken de Google Sheets API JSON
     creds_dict = st.secrets["gcp_service_account"]
-    sheet_naam = "huisgids_db" 
 except KeyError:
-    st.error("⚠️ Er ontbreken sleutels in je Secrets (google_api_key of gcp_service_account).")
+    st.error("⚠️ Er ontbreken sleutels in je Secrets.")
     st.stop()
 
 # --- PAGINA SETUP ---
 st.set_page_config(page_title="Huisgids", page_icon="🏠", layout="centered")
 
-# CSS voor strakke knoppen en mobiel gebruik
+# CSS
 st.markdown("""
 <style>
     div.stButton > button { width: 100%; border-radius: 12px; height: 3.5em; font-weight: 600; border: 1px solid #eee; transition: all 0.2s; }
@@ -36,9 +37,8 @@ def check_password():
         return True
     
     st.title("🔒 Beveiligd")
-    st.markdown("Welkom! Voer het wachtwoord in om de huisgids te openen.")
+    st.markdown("Welkom! Voer het wachtwoord in.")
     password_input = st.text_input("Wachtwoord:", type="password")
-    
     geheim_wachtwoord = st.secrets.get("guest_password", "Welkom123")
     
     if password_input:
@@ -52,25 +52,21 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- GOOGLE SHEETS VERBINDING ---
+# --- CONNECTIES ---
 @st.cache_resource
 def connect_to_gsheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
-# --- DATA OPHALEN & VERWERKEN ---
 @st.cache_data(ttl=600)
 def load_house_data():
-    info_text = "GEBRUIKERSHANDLEIDING & HUISGIDS:\n\n"
-    # Flags om te zien welke data we hebben (voor de knoppen)
-    has_cats = False
-    has_wifi = False
-    has_food = False
+    info_text = "DATABASE MET APPARATEN EN LOCATIES:\n\n"
+    has_cats, has_wifi, has_food = False, False, False
     
     try:
         client = connect_to_gsheets()
-        sheet = client.open(sheet_naam)
+        sheet = client.open(SHEET_NAAM)
         
         def read_tab(tab_name, header):
             nonlocal has_cats, has_wifi, has_food
@@ -80,9 +76,7 @@ def load_house_data():
                 if len(data) > 0:
                     df = pd.DataFrame(data)
                     text_chunk = f"--- {header} ---\n"
-                    
                     for index, row in df.iterrows():
-                        # Slimme detectie voor knoppen
                         full_row_str = str(row).lower()
                         if "wifi" in full_row_str: has_wifi = True
                         if "kat" in full_row_str or "cat" in full_row_str or "petkit" in full_row_str: has_cats = True
@@ -102,123 +96,107 @@ def load_house_data():
             except gspread.WorksheetNotFound:
                 return ""
 
-        # 1. Overig
-        info_text += read_tab("Overig", "BELANGRIJKE HUISREGELS")
-        # 2. Apparaten
-        info_text += read_tab("Apparaten", "APPARATEN & LOCATIES")
-        # 3. Buurt
-        info_text += read_tab("Buurt", "AANBEVELINGEN IN DE BUURT")
+        info_text += read_tab("Overig", "HUISHOUDELIJKE INFO")
+        info_text += read_tab("Apparaten", "APPARATEN LIJST (Merk & Model)")
+        info_text += read_tab("Buurt", "BUURT GIDS")
 
     except Exception as e:
-        return f"Fout bij Google Sheets: {e}", False, False, False
+        return f"Fout: {e}", False, False, False
         
     return info_text, has_wifi, has_cats, has_food
 
-# Setup Gemini
 try:
     genai.configure(api_key=api_key)
 except:
     pass
 
-# Laad de data
 huis_informatie, has_wifi, has_cats, has_food = load_house_data()
 
-# --- NIEUW: DEBUG VENSTER (Om te testen) ---
-with st.expander("🔧 Klik hier om te zien wat de AI leest (Debug Info)"):
-    if "Fout" in huis_informatie:
-        st.error("🚨 Er is een verbindingsfout!")
-    else:
-        st.success("✅ Verbinding geslaagd")
-    
-    st.text(f"Gevonden tekst lengte: {len(huis_informatie)} tekens")
-    st.code(huis_informatie) # Dit toont de ruwe tekst die naar de AI gaat
-
-# --- DE UI (VOORKANT) ---
+# --- UI ---
 col1, col2 = st.columns([1, 5])
 with col1:
     st.image("https://cdn-icons-png.flaticon.com/512/25/25694.png", width=50)
 with col2:
     st.title("Huisgids")
 
-# 1. ZOEKBALK
 vraag_input = st.text_input("Waar kan ik je mee helpen?", placeholder="Typ je vraag hier...", key="search_top")
 
-# 2. FOTO UPLOAD
 with st.expander("📷 Foto uploaden (voor apparaten)"):
     uploaded_file = st.file_uploader("Upload een foto", type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
     image = Image.open(uploaded_file) if uploaded_file else None
-    if image: st.image(image, width=200, caption="Geüploade foto")
+    if image: st.image(image, width=200)
 
 st.markdown("---")
 
-# 3. DYNAMISCHE KNOPPEN (Op basis van je Sheet inhoud)
 vraag_van_knop = None
 st.caption("Snelkoppelingen:")
-
-# Lijst met knoppen opbouwen
 knoppen_lijst = []
-
-# Altijd nuttige knoppen
 knoppen_lijst.append(("🔑 Sleutels & Check-out", "Hoe werkt de check-out en waar laat ik de sleutels?"))
-
-# Voorwaardelijke knoppen
-if has_wifi:
-    knoppen_lijst.append(("📶 Wifi Wachtwoord", "Wat is de naam en het wachtwoord van de wifi?"))
-else:
-    # Fallback als wifi niet gevonden is in tekst, toch handig om te vragen
-    knoppen_lijst.append(("📶 Wifi", "Hoe werkt het internet?"))
-
-if has_cats:
-    knoppen_lijst.append(("🐈 De Katten", "Hoe werkt het voeren van de katten en de kattenbak?"))
-
+if has_wifi: knoppen_lijst.append(("📶 Wifi", "Wat is de naam en het wachtwoord van de wifi?"))
+if has_cats: knoppen_lijst.append(("🐈 De Katten", "Hoe werkt het voeren van de katten en de kattenbak?"))
 knoppen_lijst.append(("☕️ Koffie", "Hoe werkt het koffiezetapparaat?"))
 knoppen_lijst.append(("🗑️ Afval", "Wat zijn de regels voor het afval?"))
+if has_food: knoppen_lijst.append(("🍕 Eten in de buurt", "Welke restaurants raad je aan?"))
+knoppen_lijst.append(("🩺 Noodgevallen", "Wat zijn de noodnummers?"))
 
-if has_food:
-    knoppen_lijst.append(("🍕 Eten in de buurt", "Welke restaurants raad je aan? Geef ook de Maps links."))
-    knoppen_lijst.append(("🛒 Supermarkt", "Waar is de dichtstbijzijnde supermarkt?"))
-
-knoppen_lijst.append(("🩺 Noodgevallen", "Wat zijn de noodnummers en waar is de EHBO?"))
-
-# Knoppen tonen in een grid van 2 breed
 for i in range(0, len(knoppen_lijst), 2):
     cols = st.columns(2)
-    # Knop Links
-    if cols[0].button(knoppen_lijst[i][0]):
-        vraag_van_knop = knoppen_lijst[i][1]
-    # Knop Rechts (als die bestaat)
+    if cols[0].button(knoppen_lijst[i][0]): vraag_van_knop = knoppen_lijst[i][1]
     if i + 1 < len(knoppen_lijst):
-        if cols[1].button(knoppen_lijst[i+1][0]):
-            vraag_van_knop = knoppen_lijst[i+1][1]
+        if cols[1].button(knoppen_lijst[i+1][0]): vraag_van_knop = knoppen_lijst[i+1][1]
 
-# --- AI LOGICA (CRASH PROOF) ---
 finale_vraag = vraag_van_knop if vraag_van_knop else vraag_input
 
+# --- AI ANTWOORD GENERATOR ---
 if finale_vraag:
-    with st.spinner('Even zoeken...'):
+    with st.spinner('Handleidingen raadplegen...'):
         response_text = ""
         
-        # PROBEER 1: Het snelle model (Flash)
+        # We bouwen een slimme prompt die vraagt om uitgebreide stappenplannen
+        prompt = f"""
+        Je bent de pro-actieve huisgids. Gebruik de database hieronder.
+        
+        DATABASE MET APPARATEN EN REGELS:
+        {huis_informatie}
+        
+        VRAAG VAN GAST: {finale_vraag}
+        
+        INSTRUCTIES VOOR JOUW ANTWOORD:
+        1. Identificatie: Kijk eerst of de vraag over een apparaat gaat dat in de lijst staat. Zo ja, zoek het Merk en Model erbij.
+        2. Handleiding Kennis: Als het een "Hoe werkt dit?" of "Probleem" vraag is:
+           - Gebruik jouw algemene AI-kennis van dit specifieke merk en model.
+           - Geef een duidelijk STAPPENPLAN (Stap 1, Stap 2, etc.) hoe het werkt. Wees heel praktisch.
+        3. YouTube Link: Als het over een apparaat gaat, genereer dan ONDERAAN je antwoord een YouTube zoek-link in dit formaat:
+           "🎥 [Bekijk instructievideo op YouTube](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
+           (Vul MERK, MODEL en ONDERWERP zelf in op basis van de vraag).
+        4. Locaties: Als het over restaurants gaat, toon ALTIJD de Google Maps link als die in de data staat.
+        5. Wees vriendelijk.
+        """
+
         try:
-            model = genai.GenerativeModel('models/gemini-2.5-flash')
-            prompt = f"""Je bent de huisgids. Info: {huis_informatie}. Vraag: {finale_vraag}. Wees kort, vriendelijk en gebruik Maps links indien beschikbaar."""
+            # Probeer eerst het nieuwste model
+            model = genai.GenerativeModel('gemini-1.5-flash') # Of 2.0-flash als beschikbaar
             inputs = [prompt, image] if image else [prompt]
             response = model.generate_content(inputs)
             response_text = response.text
             
         except Exception as e:
-            # PROBEER 2: Fallback naar het basis model (als Flash faalt)
-            # Dit lost jouw Error 404 op als de library oud is!
             try:
-                # print(f"Flash faalde: {e}, overschakelen naar Pro") 
+                # Fallback naar Pro
                 model = genai.GenerativeModel('gemini-pro')
-                # Gemini Pro ondersteunt geen beelden in de oude versie, dus alleen tekst
-                prompt = f"""Je bent de huisgids. Info: {huis_informatie}. Vraag: {finale_vraag}. Wees kort en vriendelijk."""
                 response = model.generate_content(prompt)
-                response_text = response.text + "\n\n*(Antwoord gegenereerd met basis-model)*"
+                response_text = response.text
             except Exception as e2:
-                st.error(f"Helaas, er is een technische fout: {e2}")
+                st.error("Technische fout. Probeer het later nog eens.")
         
         if response_text:
             st.markdown("### Antwoord:")
             st.info(response_text)
+
+# Debug
+with st.expander("🔧 Beheerder: Check verbinding", expanded=False):
+    if "Fout" in huis_informatie:
+        st.error(f"🚨 Verbinding mislukt met '{SHEET_NAAM}'.")
+        st.code(huis_informatie)
+    else:
+        st.success(f"✅ Verbinding met '{SHEET_NAAM}' is goed!")

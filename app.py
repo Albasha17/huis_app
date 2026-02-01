@@ -8,7 +8,7 @@ import urllib.parse # Nodig voor de YouTube links
 
 # --- CONFIGURATIE ---
 SHEET_NAAM = "huisgids_db"
-MODEL_NAAM = "models/gemini-2.0-flash" # Even geupdate naar 2.0 (is nieuwer/sneller), of gebruik 1.5
+MODEL_NAAM = "genai.GenerativeModel('models/gemini-2.5-flash')"
 
 # Haal geheime sleutels uit de kluis
 try:

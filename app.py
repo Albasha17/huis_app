@@ -4,11 +4,11 @@ from PIL import Image
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import urllib.parse # Nodig voor de YouTube links
 
 # --- CONFIGURATIE ---
 SHEET_NAAM = "huisgids_db"
-MODEL_NAAM = "models/gemini-2.5-flash"
+# We proberen jouw specifieke model, met fallback
+MODEL_NAAM = "models/gemini-2.5-flash" 
 
 # Haal geheime sleutels uit de kluis
 try:
@@ -79,7 +79,7 @@ def load_house_data():
                     for index, row in df.iterrows():
                         full_row_str = str(row).lower()
                         if "wifi" in full_row_str: has_wifi = True
-                        if "kat" in full_row_str or "cat" in full_row_str or "petkit" in full_row_str: has_cats = True
+                        if "kat" in full_row_str or "cat" in full_row_str or "baku" in full_row_str: has_cats = True
                         if "restaurant" in full_row_str or "pizza" in full_row_str: has_food = True
 
                         row_parts = []
@@ -88,6 +88,8 @@ def load_house_data():
                             if val:
                                 if "Maps" in k or "Link" in k:
                                     row_parts.append(f"Google Maps Link: {val}")
+                                elif "Web" in k or "Site" in k: # Als je een kolom 'Website' hebt
+                                    row_parts.append(f"Website: {val}")
                                 else:
                                     row_parts.append(f"{k}: {val}")
                         text_chunk += "- " + ", ".join(row_parts) + "\n"
@@ -97,7 +99,7 @@ def load_house_data():
                 return ""
 
         info_text += read_tab("Overig", "HUISHOUDELIJKE INFO")
-        info_text += read_tab("Apparaten", "APPARATEN LIJST (Merk & Model)")
+        info_text += read_tab("Apparaten", "APPARATEN LIJST")
         info_text += read_tab("Buurt", "BUURT GIDS")
 
     except Exception as e:
@@ -128,12 +130,19 @@ with st.expander("📷 Foto uploaden (voor apparaten)"):
 
 st.markdown("---")
 
+# --- KNOPPEN (AANGEPAST) ---
 vraag_van_knop = None
 st.caption("Snelkoppelingen:")
 knoppen_lijst = []
-knoppen_lijst.append(("🔑 Sleutels & Check-out", "Hoe werkt de check-out en waar laat ik de sleutels?"))
+
+# 1. Sleutels aangepast
+knoppen_lijst.append(("🔑 Sleutels", "Hoe werkt de check-out en waar laat ik de sleutels?"))
+
 if has_wifi: knoppen_lijst.append(("📶 Wifi", "Wat is de naam en het wachtwoord van de wifi?"))
-if has_cats: knoppen_lijst.append(("🐈‍⬛ Baku", "Hoe werkt het voeren van de kat en de kattenbak?"))
+
+# 2. Katten aangepast naar Baku
+if has_cats: knoppen_lijst.append(("🐈‍⬛ Baku", "Hoe werkt het voeren van Baku en de kattenbak?"))
+
 knoppen_lijst.append(("☕️ Koffie", "Hoe werkt het koffiezetapparaat?"))
 knoppen_lijst.append(("🗑️ Afval", "Wat zijn de regels voor het afval?"))
 if has_food: knoppen_lijst.append(("🍕 Eten in de buurt", "Welke restaurants raad je aan?"))
@@ -149,50 +158,52 @@ finale_vraag = vraag_van_knop if vraag_van_knop else vraag_input
 
 # --- AI ANTWOORD GENERATOR ---
 if finale_vraag:
-    with st.spinner('Even nadenken...'):
+    with st.spinner('Even checken...'):
         response_text = ""
         
-        # De instructie voor de AI
+        # PROMPT AANGEPAST MET DEEPLINK INSTRUCTIE
         prompt = f"""
-        Je bent de huisgids. Gebruik deze database:
+        Je bent de pro-actieve huisgids. Gebruik de database hieronder.
+        
+        DATABASE:
         {huis_informatie}
         
         VRAAG: {finale_vraag}
         
         INSTRUCTIES:
-        1. Zoek in de database naar antwoorden.
-        2. Als het over een apparaat gaat (Merk+Model gevonden): Leg stap-voor-stap uit hoe het werkt.
-        3. YouTube: Zet onderaan een link: "🎥 [Video Instructie](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
-        4. Maps: Geef altijd Google Maps links als die er zijn.
+        1. Zoek het antwoord in de database.
+        2. Apparaten: Als er een Merk & Model staat, leg stap-voor-stap uit hoe het werkt.
+        3. YouTube: Zet bij apparaten onderaan een link: "🎥 [Video Instructie](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
+        4. Maps: Geef altijd Google Maps links als die in de database staan.
+        5. WEBSITES & AGENDA'S: Als je verwijst naar een plek (zoals een bioscoop of restaurant), voeg dan de link naar hun website of agenda toe. 
+           Voorbeeld: "Kijk hier voor de filmtijden: [Studio K Agenda](https://studio-k.nu/agenda)" (Of gebruik de link uit de database).
         """
 
-        # POGING 1: Jouw specifieke model (2.5)
+        # POGING 1: Model 2.5
         try:
-            model = genai.GenerativeModel('models/gemini-2.5-flash')
+            model = genai.GenerativeModel(MODEL_NAAM)
             inputs = [prompt, image] if image else [prompt]
             response = model.generate_content(inputs)
             response_text = response.text
             
         except Exception as e:
-            # POGING 2: Fallback (als 2.5 niet werkt, pakken we 1.5)
+            # POGING 2: Fallback naar 1.5 (veilig)
             try:
-                # st.warning(f"Model 2.5 niet beschikbaar ({e}), ik schakel over naar 1.5.")
+                # st.warning("Fallback naar stabiel model...")
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 inputs = [prompt, image] if image else [prompt]
                 response = model.generate_content(inputs)
                 response_text = response.text
             except Exception as e2:
-                # Als alles mislukt, toon de echte foutmelding
-                st.error(f"Er ging iets mis. Detail foutmelding: {e2}")
+                st.error(f"Foutmelding: {e2}")
         
         if response_text:
             st.markdown("### Antwoord:")
             st.info(response_text)
 
-# Debug venster (om te checken of je Sheet werkt)
-with st.expander("🔧 Beheerder: Status Verbinding", expanded=False):
+# Debug (laat dit staan)
+with st.expander("🔧 Beheerder: Status", expanded=False):
     if "Fout" in huis_informatie:
-        st.error(f"🚨 Verbinding met Sheet '{SHEET_NAAM}' mislukt.")
-        st.code(huis_informatie)
+        st.error(f"🚨 Verbinding mislukt: {huis_informatie}")
     else:
-        st.success(f"✅ Verbinding met '{SHEET_NAAM}' is in orde.")
+        st.success(f"✅ Verbinding met '{SHEET_NAAM}' OK.")

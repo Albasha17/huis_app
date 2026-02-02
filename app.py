@@ -4,52 +4,174 @@ from PIL import Image
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import hashlib
 
 # --- CONFIGURATIE ---
 SHEET_NAAM = "huisgids_db"
-# We proberen jouw specifieke model, met fallback
-MODEL_NAAM = "models/gemini-2.5-flash" 
+MODEL_NAAM = "models/gemini-2.5-flash" # Met fallback naar 1.5
 
 # Haal geheime sleutels uit de kluis
 try:
     api_key = st.secrets["google_api_key"]
     creds_dict = st.secrets["gcp_service_account"]
+    geheim_wachtwoord = st.secrets.get("guest_password", "Welkom123")
 except KeyError:
     st.error("⚠️ Er ontbreken sleutels in je Secrets.")
     st.stop()
 
 # --- PAGINA SETUP ---
-st.set_page_config(page_title="Huisgids", page_icon="🏠", layout="centered")
+st.set_page_config(page_title="Huisgids / House Guide", page_icon="🏠", layout="centered")
 
-# CSS
+# --- TAAL INSTELLINGEN ---
+if 'lang' not in st.session_state:
+    st.session_state.lang = 'nl'
+
+def toggle_language():
+    if st.session_state.lang == 'nl':
+        st.session_state.lang = 'en'
+    else:
+        st.session_state.lang = 'nl'
+
+# Woordenboek voor vertalingen
+T = {
+    'nl': {
+        'title': 'Huisgids',
+        'subtitle': 'Je digitale conciërge.',
+        'search_placeholder': 'Typ je vraag hier...',
+        'upload_text': '📷 Foto uploaden (voor apparaten)',
+        'upload_btn': 'Upload een foto',
+        'login_title': '🔒 Beveiligd',
+        'login_msg': 'Welkom! Voer het wachtwoord in.',
+        'login_label': 'Wachtwoord:',
+        'login_error': 'Onjuist wachtwoord',
+        'shortcuts': 'Snelkoppelingen:',
+        'btn_keys': '🔑 Sleutels',
+        'q_keys': 'Hoe werkt de check-out en waar laat ik de sleutels?',
+        'btn_wifi': '📶 Wifi',
+        'q_wifi': 'Wat is de naam en het wachtwoord van de wifi?',
+        'btn_cat': '🐈‍⬛ Baku',
+        'q_cat': 'Hoe werkt het voeren van Baku en de kattenbak?',
+        'btn_coffee': '☕️ Koffie',
+        'q_coffee': 'Hoe werkt het koffiezetapparaat?',
+        'btn_trash': '🗑️ Afval',
+        'q_trash': 'Wat zijn de regels voor het afval?',
+        'btn_food': '🍕 Eten',
+        'q_food': 'Welke restaurants raad je aan?',
+        'btn_emergency': '🩺 Nood',
+        'q_emergency': 'Wat zijn de noodnummers?',
+        'ai_lang_instruction': 'Antwoord in het NEDERLANDS.',
+        'answer_title': 'Antwoord:',
+        'loading': 'Even zoeken...',
+        'conn_fail': '🚨 Verbinding mislukt:',
+        'conn_ok': '✅ Verbinding OK.'
+    },
+    'en': {
+        'title': 'House Guide',
+        'subtitle': 'Your digital concierge.',
+        'search_placeholder': 'Type your question here...',
+        'upload_text': '📷 Upload photo (for devices)',
+        'upload_btn': 'Upload a photo',
+        'login_title': '🔒 Secured',
+        'login_msg': 'Welcome! Please enter the password.',
+        'login_label': 'Password:',
+        'login_error': 'Incorrect password',
+        'shortcuts': 'Shortcuts:',
+        'btn_keys': '🔑 Keys',
+        'q_keys': 'How does check-out work and where do I leave the keys?',
+        'btn_wifi': '📶 Wifi',
+        'q_wifi': 'What is the wifi name and password?',
+        'btn_cat': '🐈‍⬛ Baku',
+        'q_cat': 'How do I feed Baku and handle the litter box?',
+        'btn_coffee': '☕️ Coffee',
+        'q_coffee': 'How does the coffee machine work?',
+        'btn_trash': '🗑️ Trash',
+        'q_trash': 'What are the rules for trash/recycling?',
+        'btn_food': '🍕 Food',
+        'q_food': 'Which restaurants do you recommend?',
+        'btn_emergency': '🩺 Emergency',
+        'q_emergency': 'What are the emergency numbers?',
+        'ai_lang_instruction': 'Answer in ENGLISH.',
+        'answer_title': 'Answer:',
+        'loading': 'Searching...',
+        'conn_fail': '🚨 Connection failed:',
+        'conn_ok': '✅ Connection OK.'
+    }
+}
+
+# Huidige taal selecteren
+txt = T[st.session_state.lang]
+
+# --- CSS (MOBIELE UITLIJNING & STYLE) ---
 st.markdown("""
 <style>
-    div.stButton > button { width: 100%; border-radius: 12px; height: 3.5em; font-weight: 600; border: 1px solid #eee; transition: all 0.2s; }
-    div.stButton > button:hover { border-color: #FF4B4B; color: #FF4B4B; }
+    /* Knoppen mooi maken */
+    div.stButton > button { 
+        width: 100%; 
+        border-radius: 12px; 
+        height: 3.5em; 
+        font-weight: 600; 
+        border: 1px solid #eee; 
+        transition: all 0.2s; 
+    }
+    div.stButton > button:hover { 
+        border-color: #FF4B4B; 
+        color: #FF4B4B; 
+    }
+    
+    /* Input veld groter */
     .stTextInput > div > div > input { font-size: 16px; padding: 12px; }
+    
+    /* MOBIELE KOLOMMEN FIX: Zorg dat kolommen op mobiel naast elkaar blijven (50%) */
+    [data-testid="column"] {
+        width: 50% !important;
+        flex: 1 1 50% !important;
+        min-width: 50% !important;
+    }
+    
     h1 { padding-bottom: 0px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- WACHTWOORD CHECK ---
-def check_password():
+# --- AUTHENTICATIE (MET URL HASH VOOR REFRESH) ---
+def get_password_hash(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def check_auth():
+    # 1. Check of we al ingelogd zijn in deze sessie
     if st.session_state.get('password_correct', False):
         return True
+
+    # 2. Check of er een geldig token in de URL staat (van een vorige sessie/refresh)
+    # We gebruiken st.query_params (nieuwe Streamlit syntax)
+    query_params = st.query_params
+    stored_token = query_params.get("token", None)
+    correct_hash = get_password_hash(geheim_wachtwoord)
+
+    if stored_token == correct_hash:
+        st.session_state['password_correct'] = True
+        return True
+
+    # 3. Als we niet ingelogd zijn, toon het inlogscherm
+    st.title(txt['login_title'])
+    st.markdown(txt['login_msg'])
     
-    st.title("🔒 Beveiligd")
-    st.markdown("Welkom! Voer het wachtwoord in.")
-    password_input = st.text_input("Wachtwoord:", type="password")
-    geheim_wachtwoord = st.secrets.get("guest_password", "Welkom123")
+    # Taal wissel knop ook op login scherm
+    st.button("🇳🇱 / 🇬🇧", on_click=toggle_language)
+    
+    password_input = st.text_input(txt['login_label'], type="password")
     
     if password_input:
         if password_input == geheim_wachtwoord:
             st.session_state['password_correct'] = True
+            # Zet het token in de URL zodat hij het onthoudt bij refresh
+            st.query_params["token"] = correct_hash
             st.rerun()
         else:
-            st.error("Onjuist wachtwoord")
+            st.error(txt['login_error'])
+    
     return False
 
-if not check_password():
+if not check_auth():
     st.stop()
 
 # --- CONNECTIES ---
@@ -61,9 +183,8 @@ def connect_to_gsheets():
 
 @st.cache_data(ttl=600)
 def load_house_data():
-    info_text = "DATABASE MET APPARATEN EN LOCATIES:\n\n"
+    info_text = "DATABASE:\n\n"
     has_cats, has_wifi, has_food = False, False, False
-    
     try:
         client = connect_to_gsheets()
         sheet = client.open(SHEET_NAAM)
@@ -88,7 +209,7 @@ def load_house_data():
                             if val:
                                 if "Maps" in k or "Link" in k:
                                     row_parts.append(f"Google Maps Link: {val}")
-                                elif "Web" in k or "Site" in k: # Als je een kolom 'Website' hebt
+                                elif "Web" in k or "Site" in k:
                                     row_parts.append(f"Website: {val}")
                                 else:
                                     row_parts.append(f"{k}: {val}")
@@ -114,72 +235,83 @@ except:
 
 huis_informatie, has_wifi, has_cats, has_food = load_house_data()
 
-# --- UI ---
-col1, col2 = st.columns([1, 5])
-with col1:
-    st.image("https://cdn-icons-png.flaticon.com/512/25/25694.png", width=50)
-with col2:
-    st.title("Huisgids")
+# --- UI OPBOUW ---
 
-vraag_input = st.text_input("Waar kan ik je mee helpen?", placeholder="Typ je vraag hier...", key="search_top")
+# Header met taal wissel knop rechts
+col_head1, col_head2 = st.columns([5, 1])
+with col_head1:
+    st.title(txt['title'])
+with col_head2:
+    if st.button("🇳🇱/🇬🇧"):
+        toggle_language()
+        st.rerun()
 
-with st.expander("📷 Foto uploaden (voor apparaten)"):
-    uploaded_file = st.file_uploader("Upload een foto", type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
+st.markdown(txt['subtitle'])
+
+# Zoekbalk
+vraag_input = st.text_input("", placeholder=txt['search_placeholder'], key="search_top")
+
+# Upload
+with st.expander(txt['upload_text']):
+    uploaded_file = st.file_uploader(txt['upload_btn'], type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
     image = Image.open(uploaded_file) if uploaded_file else None
     if image: st.image(image, width=200)
 
 st.markdown("---")
 
-# --- KNOPPEN (AANGEPAST) ---
+# --- KNOPPEN (VERTAALD) ---
 vraag_van_knop = None
-st.caption("Snelkoppelingen:")
+st.caption(txt['shortcuts'])
 knoppen_lijst = []
 
-# 1. Sleutels aangepast
-knoppen_lijst.append(("🔑 Sleutels", "Hoe werkt de check-out en waar laat ik de sleutels?"))
+knoppen_lijst.append((txt['btn_keys'], txt['q_keys']))
 
-if has_wifi: knoppen_lijst.append(("📶 Wifi", "Wat is de naam en het wachtwoord van de wifi?"))
+if has_wifi: knoppen_lijst.append((txt['btn_wifi'], txt['q_wifi']))
+if has_cats: knoppen_lijst.append((txt['btn_cat'], txt['q_cat']))
 
-# 2. Katten aangepast naar Baku
-if has_cats: knoppen_lijst.append(("🐈‍⬛ Baku", "Hoe werkt het voeren van Baku en de kattenbak?"))
+knoppen_lijst.append((txt['btn_coffee'], txt['q_coffee']))
+knoppen_lijst.append((txt['btn_trash'], txt['q_trash']))
 
-knoppen_lijst.append(("☕️ Koffie", "Hoe werkt het koffiezetapparaat?"))
-knoppen_lijst.append(("🗑️ Afval", "Wat zijn de regels voor het afval?"))
-if has_food: knoppen_lijst.append(("🍕 Eten in de buurt", "Welke restaurants raad je aan?"))
-knoppen_lijst.append(("🩺 Noodgevallen", "Wat zijn de noodnummers?"))
+if has_food: knoppen_lijst.append((txt['btn_food'], txt['q_food']))
+knoppen_lijst.append((txt['btn_emergency'], txt['q_emergency']))
 
+# Grid van 2 kolommen (CSS forceert dit ook op mobiel)
 for i in range(0, len(knoppen_lijst), 2):
     cols = st.columns(2)
-    if cols[0].button(knoppen_lijst[i][0]): vraag_van_knop = knoppen_lijst[i][1]
+    # Knop 1
+    if cols[0].button(knoppen_lijst[i][0]): 
+        vraag_van_knop = knoppen_lijst[i][1]
+    # Knop 2
     if i + 1 < len(knoppen_lijst):
-        if cols[1].button(knoppen_lijst[i+1][0]): vraag_van_knop = knoppen_lijst[i+1][1]
+        if cols[1].button(knoppen_lijst[i+1][0]): 
+            vraag_van_knop = knoppen_lijst[i+1][1]
 
 finale_vraag = vraag_van_knop if vraag_van_knop else vraag_input
 
 # --- AI ANTWOORD GENERATOR ---
 if finale_vraag:
-    with st.spinner('Even checken...'):
+    with st.spinner(txt['loading']):
         response_text = ""
         
-        # PROMPT AANGEPAST MET DEEPLINK INSTRUCTIE
+        # PROMPT MET TAAL INSTRUCTIE
         prompt = f"""
-        Je bent de pro-actieve huisgids. Gebruik de database hieronder.
+        Je bent de pro-actieve huisgids.
+        
+        INSTRUCTIE VOOR TAAL: {txt['ai_lang_instruction']}
         
         DATABASE:
         {huis_informatie}
         
         VRAAG: {finale_vraag}
         
-        INSTRUCTIES:
+        REGELS:
         1. Zoek het antwoord in de database.
-        2. Apparaten: Als er een Merk & Model staat, leg stap-voor-stap uit hoe het werkt.
-        3. YouTube: Zet bij apparaten onderaan een link: "🎥 [Video Instructie](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
-        4. Maps: Geef altijd Google Maps links als die in de database staan.
-        5. WEBSITES & AGENDA'S: Als je verwijst naar een plek (zoals een bioscoop of restaurant), voeg dan de link naar hun website of agenda toe. 
-           Voorbeeld: "Kijk hier voor de filmtijden: [Studio K Agenda](https://studio-k.nu/agenda)" (Of gebruik de link uit de database).
+        2. Apparaten: Leg stap-voor-stap uit hoe het werkt.
+        3. YouTube: Zet bij apparaten onderaan een link: "🎥 [Video](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
+        4. Maps/Web: Geef altijd de links als die in de database staan.
         """
 
-        # POGING 1: Model 2.5
+        # POGING 1: 2.5
         try:
             model = genai.GenerativeModel(MODEL_NAAM)
             inputs = [prompt, image] if image else [prompt]
@@ -187,23 +319,22 @@ if finale_vraag:
             response_text = response.text
             
         except Exception as e:
-            # POGING 2: Fallback naar 1.5 (veilig)
+            # POGING 2: Fallback 1.5
             try:
-                # st.warning("Fallback naar stabiel model...")
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 inputs = [prompt, image] if image else [prompt]
                 response = model.generate_content(inputs)
                 response_text = response.text
             except Exception as e2:
-                st.error(f"Foutmelding: {e2}")
+                st.error(f"Error: {e2}")
         
         if response_text:
-            st.markdown("### Antwoord:")
+            st.markdown(f"### {txt['answer_title']}")
             st.info(response_text)
 
-# Debug (laat dit staan)
-with st.expander("🔧 Beheerder: Status", expanded=False):
+# Debug
+with st.expander("🔧 Status", expanded=False):
     if "Fout" in huis_informatie:
-        st.error(f"🚨 Verbinding mislukt: {huis_informatie}")
+        st.error(f"{txt['conn_fail']} {huis_informatie}")
     else:
-        st.success(f"✅ Verbinding met '{SHEET_NAAM}' OK.")
+        st.success(f"{txt['conn_ok']} - {SHEET_NAAM}")

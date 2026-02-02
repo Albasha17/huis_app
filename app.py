@@ -133,7 +133,7 @@ st.caption("Snelkoppelingen:")
 knoppen_lijst = []
 knoppen_lijst.append(("🔑 Sleutels & Check-out", "Hoe werkt de check-out en waar laat ik de sleutels?"))
 if has_wifi: knoppen_lijst.append(("📶 Wifi", "Wat is de naam en het wachtwoord van de wifi?"))
-if has_cats: knoppen_lijst.append(("🐈 De Katten", "Hoe werkt het voeren van de katten en de kattenbak?"))
+if has_cats: knoppen_lijst.append(("🐈‍⬛ Baku", "Hoe werkt het voeren van de kat en de kattenbak?"))
 knoppen_lijst.append(("☕️ Koffie", "Hoe werkt het koffiezetapparaat?"))
 knoppen_lijst.append(("🗑️ Afval", "Wat zijn de regels voor het afval?"))
 if has_food: knoppen_lijst.append(("🍕 Eten in de buurt", "Welke restaurants raad je aan?"))

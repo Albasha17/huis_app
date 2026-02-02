@@ -4,5 +4,4 @@ pillow
 pandas
 gspread
 oauth2client
-odfpy
-openpyxl
+streamlit-mic-recorder

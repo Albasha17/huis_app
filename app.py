@@ -22,42 +22,7 @@ except KeyError:
 # --- PAGINA SETUP ---
 st.set_page_config(page_title="Huisgids", page_icon="🏠", layout="centered")
 
-# --- CSS STYLING (AANGEPAST VOOR UITLIJNING) ---
-st.markdown("""
-<style>
-    /* Knoppen mooi maken */
-    div.stButton > button { 
-        width: 100%; 
-        border-radius: 12px; 
-        height: 3rem; 
-        font-weight: 600; 
-        border: 1px solid #eee; 
-    }
-    div.stButton > button:hover { 
-        border-color: #FF4B4B; 
-        color: #FF4B4B; 
-    }
-    
-    /* Zorg dat de input even hoog is als de knop ernaast */
-    .stTextInput > div > div > input { 
-        height: 3rem; 
-        font-size: 16px; 
-        padding: 12px; 
-    }
-    
-    /* Verwijder extra witruimte boven kolommen voor strakke look */
-    [data-testid="column"] {
-        padding-top: 0px;
-    }
-    
-    /* Mobiele fix: zorg dat kolommen niet te smal worden */
-    [data-testid="column"] { min-width: 10px !important; }
-    
-    h1 { padding-bottom: 0px; }
-</style>
-""", unsafe_allow_html=True)
-
-# --- TAAL ---
+# --- TAAL & VERTALINGEN ---
 if 'lang' not in st.session_state:
     st.session_state.lang = 'nl'
 
@@ -69,26 +34,18 @@ T = {
         'title': 'Huisgids',
         'subtitle': 'Je digitale conciërge.',
         'search_placeholder': 'Typ je vraag hier...',
-        'upload_label': '📷',
         'login_title': '🔒 Beveiligd',
         'login_msg': 'Welkom! Voer het wachtwoord in.',
         'login_label': 'Wachtwoord:',
         'login_error': 'Onjuist wachtwoord',
         'shortcuts_header': 'Snelkoppelingen (Klik om te openen)',
-        'btn_keys': '🔑 Sleutels',
-        'q_keys': 'Hoe werkt de check-out en waar laat ik de sleutels?',
-        'btn_wifi': '📶 Wifi',
-        'q_wifi': 'Wat is de naam en het wachtwoord van de wifi?',
-        'btn_cat': '🐈‍⬛ Baku',
-        'q_cat': 'Hoe zorg ik voor Baku? Vertel over het voeren, de kattenbak én specifiek hoe de "Cat water fountain" werkt.',
-        'btn_coffee': '☕️ Koffie',
-        'q_coffee': 'Hoe werkt het koffiezetapparaat?',
-        'btn_trash': '🗑️ Afval',
-        'q_trash': 'Wat zijn de regels voor het afval?',
-        'btn_food': '🍕 Eten',
-        'q_food': 'Welke restaurants raad je aan?',
-        'btn_emergency': '🩺 Nood',
-        'q_emergency': 'Wat zijn de noodnummers?',
+        'btn_keys': '🔑 Sleutels', 'q_keys': 'Hoe werkt de check-out en waar laat ik de sleutels?',
+        'btn_wifi': '📶 Wifi', 'q_wifi': 'Wat is de naam en het wachtwoord van de wifi?',
+        'btn_cat': '🐈‍⬛ Baku', 'q_cat': 'Hoe zorg ik voor Baku? Vertel over het voeren, de kattenbak én specifiek hoe de "Cat water fountain" werkt.',
+        'btn_coffee': '☕️ Koffie', 'q_coffee': 'Hoe werkt het koffiezetapparaat?',
+        'btn_trash': '🗑️ Afval', 'q_trash': 'Wat zijn de regels voor het afval?',
+        'btn_food': '🍕 Eten', 'q_food': 'Welke restaurants raad je aan?',
+        'btn_emergency': '🩺 Nood', 'q_emergency': 'Wat zijn de noodnummers?',
         'ai_lang_instruction': 'Antwoord in het NEDERLANDS.',
         'answer_title': 'Antwoord:',
         'loading': 'Even zoeken...',
@@ -99,26 +56,18 @@ T = {
         'title': 'House Guide',
         'subtitle': 'Your digital concierge.',
         'search_placeholder': 'Type your question here...',
-        'upload_label': '📷',
         'login_title': '🔒 Secured',
         'login_msg': 'Welcome! Please enter the password.',
         'login_label': 'Password:',
         'login_error': 'Incorrect password',
         'shortcuts_header': 'Shortcuts (Click to expand)',
-        'btn_keys': '🔑 Keys',
-        'q_keys': 'How does check-out work and where do I leave the keys?',
-        'btn_wifi': '📶 Wifi',
-        'q_wifi': 'What is the wifi name and password?',
-        'btn_cat': '🐈‍⬛ Baku',
-        'q_cat': 'How do I care for Baku? Tell me about feeding, the litter box AND specifically how the "Cat water fountain" works.',
-        'btn_coffee': '☕️ Coffee',
-        'q_coffee': 'How does the coffee machine work?',
-        'btn_trash': '🗑️ Trash',
-        'q_trash': 'What are the rules for trash/recycling?',
-        'btn_food': '🍕 Food',
-        'q_food': 'Which restaurants do you recommend?',
-        'btn_emergency': '🩺 Emergency',
-        'q_emergency': 'What are the emergency numbers?',
+        'btn_keys': '🔑 Keys', 'q_keys': 'How does check-out work and where do I leave the keys?',
+        'btn_wifi': '📶 Wifi', 'q_wifi': 'What is the wifi name and password?',
+        'btn_cat': '🐈‍⬛ Baku', 'q_cat': 'How do I care for Baku? Tell me about feeding, the litter box AND specifically how the "Cat water fountain" works.',
+        'btn_coffee': '☕️ Coffee', 'q_coffee': 'How does the coffee machine work?',
+        'btn_trash': '🗑️ Trash', 'q_trash': 'What are the rules for trash/recycling?',
+        'btn_food': '🍕 Food', 'q_food': 'Which restaurants do you recommend?',
+        'btn_emergency': '🩺 Emergency', 'q_emergency': 'What are the emergency numbers?',
         'ai_lang_instruction': 'Answer in ENGLISH.',
         'answer_title': 'Answer:',
         'loading': 'Searching...',
@@ -128,7 +77,81 @@ T = {
 }
 txt = T[st.session_state.lang]
 
-# --- AUTH ---
+# --- CSS STYLING (CRUCIAAL VOOR UITLIJNING) ---
+st.markdown("""
+<style>
+    /* 1. Algemene knop styling */
+    div.stButton > button { 
+        width: 100%; 
+        border-radius: 12px; 
+        height: 3rem; 
+        font-weight: 600; 
+        border: 1px solid #eee; 
+    }
+    div.stButton > button:hover { border-color: #FF4B4B; color: #FF4B4B; }
+    
+    /* 2. Zoekbalk hoogte */
+    .stTextInput > div > div > input { height: 3rem; font-size: 16px; padding: 12px; }
+    
+    /* 3. CAMERAKNOP HACK: Maak de file uploader compact en onzichtbaar over een icoon */
+    [data-testid="stFileUploader"] {
+        padding: 0px;
+        margin: 0px;
+    }
+    [data-testid="stFileUploader"] section {
+        padding: 0px;
+        min-height: 0px;
+        background-color: transparent;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    /* Verberg de tekst 'Drag and drop file here' */
+    [data-testid="stFileUploader"] section > div {
+        display: none;
+    }
+    /* Laat de kleine button 'Browse files' lijken op een emoji knop */
+    [data-testid="stFileUploader"] button {
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: transparent; 
+    }
+    /* Voeg een emoji toe via CSS omdat we de text niet kunnen aanpassen */
+    [data-testid="stFileUploader"] section::after {
+        content: "📷";  /* Camera Emoji */
+        font-size: 24px;
+        position: absolute;
+        pointer-events: none;
+    }
+    
+    /* 4. Kolommen witruimte weghalen */
+    [data-testid="column"] { padding-top: 0px; }
+    
+    /* 5. Taalknop Rechtsboven */
+    .lang-btn-container { text-align: right; }
+</style>
+""", unsafe_allow_html=True)
+
+# --- HEADER FUNCTIE (TITEL + TAALKNOP) ---
+# Deze gebruiken we op BEIDE pagina's voor consistentie
+def render_header(title_text, subtitle_text=None):
+    c1, c2 = st.columns([6, 1]) # Grote linkerkolom, kleine rechterkolom
+    with c1:
+        st.title(title_text)
+        if subtitle_text:
+            st.markdown(subtitle_text)
+    with c2:
+        # Taalknop rechtsboven
+        if st.button("🇳🇱/🇬🇧", key=f"lang_btn_{title_text}"):
+            toggle_language()
+            st.rerun()
+    st.write("") # Witruimte
+
+# --- AUTHENTICATIE ---
 def get_password_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -141,10 +164,12 @@ def check_auth():
         st.session_state['password_correct'] = True
         return True
     
-    st.title(txt['login_title'])
+    # LOGIN SCHERM UI
+    render_header(txt['login_title']) # Gebruik de header functie
+    
     st.markdown(txt['login_msg'])
-    if st.button("🇳🇱 / 🇬🇧"): toggle_language(); st.rerun()
     pwd = st.text_input(txt['login_label'], type="password")
+    
     if pwd:
         if pwd == geheim_wachtwoord:
             st.session_state['password_correct'] = True
@@ -155,7 +180,7 @@ def check_auth():
 
 if not check_auth(): st.stop()
 
-# --- CONNECT ---
+# --- CONNECTIES ---
 @st.cache_resource
 def connect_to_gsheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -200,40 +225,29 @@ except: pass
 
 huis_informatie, has_wifi, has_cats, has_food = load_house_data()
 
-# --- UI OPBOUW ---
+# --- MAIN UI OPBOUW ---
 
-st.title(txt['title'])
-st.markdown(txt['subtitle'])
-st.write("") # Witruimte
+# 1. HEADER (Titel + Taalknop)
+render_header(txt['title'], txt['subtitle'])
 
-# 1. ZOEKBALK + TAALKNOP (Naast elkaar)
-# Verhouding 5:1 zorgt dat de zoekbalk breed is en de knop klein rechts
-col_search, col_lang = st.columns([5, 1])
+# 2. ZOEKBALK, MIC & CAMERA (Naast elkaar op Desktop, gestapeld op Mobiel)
+if "search_query" not in st.session_state: st.session_state.search_query = ""
 
-with col_search:
-    if "search_query" not in st.session_state: st.session_state.search_query = ""
-    # Label visibility collapsed verwijdert de tekst boven de balk voor betere uitlijning
+# Layout: [Zoekbalk (6), Mic (1), Cam (1)]
+# Op desktop staan ze naast elkaar. Op mobiel stapelen ze onder elkaar.
+# Omdat we 'links uitgelijnd' willen op mobiel, is dit de standaard werking.
+c_search, c_mic, c_cam = st.columns([6, 1, 1])
+
+with c_search:
     text_input_val = st.text_input("Zoek", placeholder=txt['search_placeholder'], key="search_query", label_visibility="collapsed")
 
-with col_lang:
-    # Taal knop
-    if st.button("🇳🇱/🇬🇧", key="lang_btn_main"):
-        toggle_language()
-        st.rerun()
-
-# 2. MICROFOON + CAMERA (Onder elkaar, 2 kolommen)
-col_mic, col_cam = st.columns(2)
-
-with col_mic:
+with c_mic:
     # Voice button
     voice_text = speech_to_text(language=st.session_state.lang, start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='mic_recorder')
 
-with col_cam:
-    # Upload button
+with c_cam:
+    # Upload button (Gebruikt CSS hack om eruit te zien als 📷 knop)
     uploaded_file = st.file_uploader("Cam", type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
-    # Hack: We tonen een knop-achtige tekst met emoji omdat file_uploader standaard lelijk is
-    if not uploaded_file:
-        st.markdown("<div style='text-align: center; color: #666;'>📷</div>", unsafe_allow_html=True)
 
 # Logic: Voice update
 if voice_text and voice_text != st.session_state.search_query:

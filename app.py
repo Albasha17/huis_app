@@ -5,10 +5,12 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import hashlib
+# Nieuwe import voor spraak
+from streamlit_mic_recorder import speech_to_text
 
 # --- CONFIGURATIE ---
 SHEET_NAAM = "huisgids_db"
-MODEL_NAAM = "models/gemini-2.5-flash" # Met fallback naar 1.5
+MODEL_NAAM = "models/gemini-2.5-flash" 
 
 # Haal geheime sleutels uit de kluis
 try:
@@ -27,10 +29,7 @@ if 'lang' not in st.session_state:
     st.session_state.lang = 'nl'
 
 def toggle_language():
-    if st.session_state.lang == 'nl':
-        st.session_state.lang = 'en'
-    else:
-        st.session_state.lang = 'nl'
+    st.session_state.lang = 'en' if st.session_state.lang == 'nl' else 'nl'
 
 # Woordenboek voor vertalingen
 T = {
@@ -38,6 +37,8 @@ T = {
         'title': 'Huisgids',
         'subtitle': 'Je digitale conciërge.',
         'search_placeholder': 'Typ je vraag hier...',
+        'voice_btn': '🎤 Spreek je vraag in',
+        'voice_instruction': 'Klik om te spreken',
         'upload_text': '📷 Foto uploaden (voor apparaten)',
         'upload_btn': 'Upload een foto',
         'login_title': '🔒 Beveiligd',
@@ -50,7 +51,8 @@ T = {
         'btn_wifi': '📶 Wifi',
         'q_wifi': 'Wat is de naam en het wachtwoord van de wifi?',
         'btn_cat': '🐈‍⬛ Baku',
-        'q_cat': 'Hoe werkt het voeren van Baku en de kattenbak?',
+        # HIER IS DE AANPASSING VOOR DE WATERFONTEIN:
+        'q_cat': 'Hoe zorg ik voor Baku? Vertel over het voeren, de kattenbak én specifiek hoe de "Cat water fountain" werkt.',
         'btn_coffee': '☕️ Koffie',
         'q_coffee': 'Hoe werkt het koffiezetapparaat?',
         'btn_trash': '🗑️ Afval',
@@ -69,6 +71,8 @@ T = {
         'title': 'House Guide',
         'subtitle': 'Your digital concierge.',
         'search_placeholder': 'Type your question here...',
+        'voice_btn': '🎤 Speak your question',
+        'voice_instruction': 'Click to speak',
         'upload_text': '📷 Upload photo (for devices)',
         'upload_btn': 'Upload a photo',
         'login_title': '🔒 Secured',
@@ -81,7 +85,8 @@ T = {
         'btn_wifi': '📶 Wifi',
         'q_wifi': 'What is the wifi name and password?',
         'btn_cat': '🐈‍⬛ Baku',
-        'q_cat': 'How do I feed Baku and handle the litter box?',
+        # ENGELSE AANPASSING VOOR WATERFONTEIN:
+        'q_cat': 'How do I care for Baku? Tell me about feeding, the litter box AND specifically how the "Cat water fountain" works.',
         'btn_coffee': '☕️ Coffee',
         'q_coffee': 'How does the coffee machine work?',
         'btn_trash': '🗑️ Trash',
@@ -98,51 +103,28 @@ T = {
     }
 }
 
-# Huidige taal selecteren
 txt = T[st.session_state.lang]
 
-# --- CSS (MOBIELE UITLIJNING & STYLE) ---
+# --- CSS ---
 st.markdown("""
 <style>
-    /* Knoppen mooi maken */
-    div.stButton > button { 
-        width: 100%; 
-        border-radius: 12px; 
-        height: 3.5em; 
-        font-weight: 600; 
-        border: 1px solid #eee; 
-        transition: all 0.2s; 
-    }
-    div.stButton > button:hover { 
-        border-color: #FF4B4B; 
-        color: #FF4B4B; 
-    }
-    
-    /* Input veld groter */
+    div.stButton > button { width: 100%; border-radius: 12px; height: 3.5em; font-weight: 600; border: 1px solid #eee; transition: all 0.2s; }
+    div.stButton > button:hover { border-color: #FF4B4B; color: #FF4B4B; }
     .stTextInput > div > div > input { font-size: 16px; padding: 12px; }
-    
-    /* MOBIELE KOLOMMEN FIX: Zorg dat kolommen op mobiel naast elkaar blijven (50%) */
-    [data-testid="column"] {
-        width: 50% !important;
-        flex: 1 1 50% !important;
-        min-width: 50% !important;
-    }
-    
+    /* Mobiele kolommen fix */
+    [data-testid="column"] { width: 50% !important; flex: 1 1 50% !important; min-width: 50% !important; }
     h1 { padding-bottom: 0px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- AUTHENTICATIE (MET URL HASH VOOR REFRESH) ---
+# --- AUTHENTICATIE ---
 def get_password_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def check_auth():
-    # 1. Check of we al ingelogd zijn in deze sessie
     if st.session_state.get('password_correct', False):
         return True
-
-    # 2. Check of er een geldig token in de URL staat (van een vorige sessie/refresh)
-    # We gebruiken st.query_params (nieuwe Streamlit syntax)
+    
     query_params = st.query_params
     stored_token = query_params.get("token", None)
     correct_hash = get_password_hash(geheim_wachtwoord)
@@ -151,24 +133,18 @@ def check_auth():
         st.session_state['password_correct'] = True
         return True
 
-    # 3. Als we niet ingelogd zijn, toon het inlogscherm
     st.title(txt['login_title'])
     st.markdown(txt['login_msg'])
-    
-    # Taal wissel knop ook op login scherm
     st.button("🇳🇱 / 🇬🇧", on_click=toggle_language)
     
     password_input = st.text_input(txt['login_label'], type="password")
-    
     if password_input:
         if password_input == geheim_wachtwoord:
             st.session_state['password_correct'] = True
-            # Zet het token in de URL zodat hij het onthoudt bij refresh
             st.query_params["token"] = correct_hash
             st.rerun()
         else:
             st.error(txt['login_error'])
-    
     return False
 
 if not check_auth():
@@ -236,8 +212,6 @@ except:
 huis_informatie, has_wifi, has_cats, has_food = load_house_data()
 
 # --- UI OPBOUW ---
-
-# Header met taal wissel knop rechts
 col_head1, col_head2 = st.columns([5, 1])
 with col_head1:
     st.title(txt['title'])
@@ -248,8 +222,26 @@ with col_head2:
 
 st.markdown(txt['subtitle'])
 
-# Zoekbalk
-vraag_input = st.text_input("", placeholder=txt['search_placeholder'], key="search_top")
+# --- NIEUW: SPRAAK GEDEELTE ---
+# We maken twee kolommen: links tekst input, rechts microfoon
+col_search, col_mic = st.columns([4, 1])
+
+with col_search:
+    text_input_val = st.text_input("", placeholder=txt['search_placeholder'], key="search_text_field")
+
+with col_mic:
+    # De microfoon knop. Als je spreekt, komt de tekst in 'voice_text'
+    # Justify zorgt dat hij mooi uitlijnt
+    st.write("") # Klein beetje witruimte
+    st.write("") 
+    voice_text = speech_to_text(language=st.session_state.lang, start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='mic')
+
+# Bepaal wat de input is: stem of typen?
+vraag_input = None
+if voice_text:
+    vraag_input = voice_text
+elif text_input_val:
+    vraag_input = text_input_val
 
 # Upload
 with st.expander(txt['upload_text']):
@@ -259,45 +251,39 @@ with st.expander(txt['upload_text']):
 
 st.markdown("---")
 
-# --- KNOPPEN (VERTAALD) ---
+# --- KNOPPEN ---
 vraag_van_knop = None
 st.caption(txt['shortcuts'])
 knoppen_lijst = []
 
 knoppen_lijst.append((txt['btn_keys'], txt['q_keys']))
-
 if has_wifi: knoppen_lijst.append((txt['btn_wifi'], txt['q_wifi']))
-if has_cats: knoppen_lijst.append((txt['btn_cat'], txt['q_cat']))
-
+if has_cats: knoppen_lijst.append((txt['btn_cat'], txt['q_cat'])) # Bevat nu waterfontein instructie
 knoppen_lijst.append((txt['btn_coffee'], txt['q_coffee']))
 knoppen_lijst.append((txt['btn_trash'], txt['q_trash']))
-
 if has_food: knoppen_lijst.append((txt['btn_food'], txt['q_food']))
 knoppen_lijst.append((txt['btn_emergency'], txt['q_emergency']))
 
-# Grid van 2 kolommen (CSS forceert dit ook op mobiel)
 for i in range(0, len(knoppen_lijst), 2):
     cols = st.columns(2)
-    # Knop 1
-    if cols[0].button(knoppen_lijst[i][0]): 
-        vraag_van_knop = knoppen_lijst[i][1]
-    # Knop 2
+    if cols[0].button(knoppen_lijst[i][0]): vraag_van_knop = knoppen_lijst[i][1]
     if i + 1 < len(knoppen_lijst):
-        if cols[1].button(knoppen_lijst[i+1][0]): 
-            vraag_van_knop = knoppen_lijst[i+1][1]
+        if cols[1].button(knoppen_lijst[i+1][0]): vraag_van_knop = knoppen_lijst[i+1][1]
 
 finale_vraag = vraag_van_knop if vraag_van_knop else vraag_input
 
 # --- AI ANTWOORD GENERATOR ---
 if finale_vraag:
+    # Als het van voice komt, toon even wat er verstaan is
+    if voice_text:
+        st.info(f"🎤: \"{voice_text}\"")
+        
     with st.spinner(txt['loading']):
         response_text = ""
         
-        # PROMPT MET TAAL INSTRUCTIE
         prompt = f"""
-        Je bent de pro-actieve huisgids.
-        
-        INSTRUCTIE VOOR TAAL: {txt['ai_lang_instruction']}
+        Je bent de huisgids.
+        TAAL INSTRUCTIE: {txt['ai_lang_instruction']}
         
         DATABASE:
         {huis_informatie}
@@ -305,21 +291,18 @@ if finale_vraag:
         VRAAG: {finale_vraag}
         
         REGELS:
-        1. Zoek het antwoord in de database.
-        2. Apparaten: Leg stap-voor-stap uit hoe het werkt.
-        3. YouTube: Zet bij apparaten onderaan een link: "🎥 [Video](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
-        4. Maps/Web: Geef altijd de links als die in de database staan.
+        1. Zoek antwoord in database.
+        2. Apparaten: Leg stap-voor-stap uit.
+        3. YouTube: Link toevoegen "🎥 [Video](https://www.youtube.com/results?search_query=MERK+MODEL+ONDERWERP)"
+        4. Maps/Web: Geef links als beschikbaar.
         """
 
-        # POGING 1: 2.5
         try:
             model = genai.GenerativeModel(MODEL_NAAM)
             inputs = [prompt, image] if image else [prompt]
             response = model.generate_content(inputs)
             response_text = response.text
-            
         except Exception as e:
-            # POGING 2: Fallback 1.5
             try:
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 inputs = [prompt, image] if image else [prompt]
@@ -332,7 +315,6 @@ if finale_vraag:
             st.markdown(f"### {txt['answer_title']}")
             st.info(response_text)
 
-# Debug
 with st.expander("🔧 Status", expanded=False):
     if "Fout" in huis_informatie:
         st.error(f"{txt['conn_fail']} {huis_informatie}")

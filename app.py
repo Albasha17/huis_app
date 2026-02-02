@@ -38,7 +38,7 @@ T = {
         'login_msg': 'Welkom! Voer het wachtwoord in.',
         'login_label': 'Wachtwoord:',
         'login_error': 'Onjuist wachtwoord',
-        'shortcuts_header': 'Snelkoppelingen (Klik om te openen)',
+        'shortcuts_header': 'Snelkoppelingen (Klik om te sluiten)',
         'btn_keys': '🔑 Sleutels', 'q_keys': 'Hoe werkt de check-out en waar laat ik de sleutels?',
         'btn_wifi': '📶 Wifi', 'q_wifi': 'Wat is de naam en het wachtwoord van de wifi?',
         'btn_cat': '🐈‍⬛ Baku', 'q_cat': 'Hoe zorg ik voor Baku? Vertel over het voeren, de kattenbak én specifiek hoe de "Cat water fountain" werkt.',
@@ -60,7 +60,7 @@ T = {
         'login_msg': 'Welcome! Please enter the password.',
         'login_label': 'Password:',
         'login_error': 'Incorrect password',
-        'shortcuts_header': 'Shortcuts (Click to expand)',
+        'shortcuts_header': 'Shortcuts (Click to collapse)',
         'btn_keys': '🔑 Keys', 'q_keys': 'How does check-out work and where do I leave the keys?',
         'btn_wifi': '📶 Wifi', 'q_wifi': 'What is the wifi name and password?',
         'btn_cat': '🐈‍⬛ Baku', 'q_cat': 'How do I care for Baku? Tell me about feeding, the litter box AND specifically how the "Cat water fountain" works.',
@@ -77,7 +77,7 @@ T = {
 }
 txt = T[st.session_state.lang]
 
-# --- CSS STYLING (CRUCIAAL VOOR UITLIJNING) ---
+# --- CSS STYLING ---
 st.markdown("""
 <style>
     /* 1. Algemene knop styling */
@@ -90,66 +90,66 @@ st.markdown("""
     }
     div.stButton > button:hover { border-color: #FF4B4B; color: #FF4B4B; }
     
-    /* 2. Zoekbalk hoogte */
+    /* 2. Zoekbalk styling - zelfde hoogte als knoppen */
     .stTextInput > div > div > input { height: 3rem; font-size: 16px; padding: 12px; }
     
-    /* 3. CAMERAKNOP HACK: Maak de file uploader compact en onzichtbaar over een icoon */
+    /* 3. CAMERAKNOP HACK: Maak de file uploader een vierkant knopje */
     [data-testid="stFileUploader"] {
         padding: 0px;
         margin: 0px;
+        width: 100%;
     }
     [data-testid="stFileUploader"] section {
         padding: 0px;
-        min-height: 0px;
         background-color: transparent;
         border: 1px solid #eee;
         border-radius: 12px;
-        height: 3rem;
+        height: 3rem; /* Zelfde hoogte als mic knop */
         display: flex;
         align-items: center;
         justify-content: center;
+        transition: border 0.2s;
     }
-    /* Verberg de tekst 'Drag and drop file here' */
-    [data-testid="stFileUploader"] section > div {
-        display: none;
+    [data-testid="stFileUploader"] section:hover {
+        border-color: #FF4B4B;
     }
-    /* Laat de kleine button 'Browse files' lijken op een emoji knop */
-    [data-testid="stFileUploader"] button {
-        width: 100%;
-        border: none;
-        background: transparent;
-        color: transparent; 
+    
+    /* Verberg de standaard tekst en icoon van upload */
+    [data-testid="stFileUploader"] section > div,
+    [data-testid="stFileUploader"] section > button, 
+    [data-testid="stFileUploader"] section span {
+        display: none !important;
     }
-    /* Voeg een emoji toe via CSS omdat we de text niet kunnen aanpassen */
+    
+    /* Voeg de camera emoji toe */
     [data-testid="stFileUploader"] section::after {
-        content: "📷";  /* Camera Emoji */
-        font-size: 24px;
+        content: "📷";
+        font-size: 1.5rem;
         position: absolute;
         pointer-events: none;
     }
     
-    /* 4. Kolommen witruimte weghalen */
-    [data-testid="column"] { padding-top: 0px; }
+    /* 4. Kolommen witruimte weghalen voor strakke uitlijning */
+    [data-testid="column"] { padding-top: 0px; padding-bottom: 0px; }
     
-    /* 5. Taalknop Rechtsboven */
-    .lang-btn-container { text-align: right; }
+    /* 5. Zorg dat de knoppen verticaal in het midden staan tov zoekbalk */
+    div[data-testid="column"] {
+        align-self: flex-start; /* Of center, afhankelijk van hoe Streamlit rendert */
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER FUNCTIE (TITEL + TAALKNOP) ---
-# Deze gebruiken we op BEIDE pagina's voor consistentie
+# --- HEADER FUNCTIE ---
 def render_header(title_text, subtitle_text=None):
-    c1, c2 = st.columns([6, 1]) # Grote linkerkolom, kleine rechterkolom
+    c1, c2 = st.columns([6, 1])
     with c1:
         st.title(title_text)
-        if subtitle_text:
-            st.markdown(subtitle_text)
+        if subtitle_text: st.markdown(subtitle_text)
     with c2:
-        # Taalknop rechtsboven
         if st.button("🇳🇱/🇬🇧", key=f"lang_btn_{title_text}"):
             toggle_language()
             st.rerun()
-    st.write("") # Witruimte
+    st.write("")
 
 # --- AUTHENTICATIE ---
 def get_password_hash(password):
@@ -164,12 +164,9 @@ def check_auth():
         st.session_state['password_correct'] = True
         return True
     
-    # LOGIN SCHERM UI
-    render_header(txt['login_title']) # Gebruik de header functie
-    
+    render_header(txt['login_title'])
     st.markdown(txt['login_msg'])
     pwd = st.text_input(txt['login_label'], type="password")
-    
     if pwd:
         if pwd == geheim_wachtwoord:
             st.session_state['password_correct'] = True
@@ -225,29 +222,30 @@ except: pass
 
 huis_informatie, has_wifi, has_cats, has_food = load_house_data()
 
-# --- MAIN UI OPBOUW ---
-
-# 1. HEADER (Titel + Taalknop)
+# --- MAIN UI ---
 render_header(txt['title'], txt['subtitle'])
 
-# 2. ZOEKBALK, MIC & CAMERA (Naast elkaar op Desktop, gestapeld op Mobiel)
 if "search_query" not in st.session_state: st.session_state.search_query = ""
 
-# Layout: [Zoekbalk (6), Mic (1), Cam (1)]
-# Op desktop staan ze naast elkaar. Op mobiel stapelen ze onder elkaar.
-# Omdat we 'links uitgelijnd' willen op mobiel, is dit de standaard werking.
-c_search, c_mic, c_cam = st.columns([6, 1, 1])
+# LAYOUT:
+# We gebruiken kolommen in kolommen om de knoppen bij elkaar te houden op mobiel.
+# Hoofdkolommen: [Zoekbalk (4), Knoppengroep (1.5)]
+col_main_search, col_main_buttons = st.columns([4, 1.5])
 
-with c_search:
+with col_main_search:
     text_input_val = st.text_input("Zoek", placeholder=txt['search_placeholder'], key="search_query", label_visibility="collapsed")
 
-with c_mic:
-    # Voice button
-    voice_text = speech_to_text(language=st.session_state.lang, start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='mic_recorder')
-
-with c_cam:
-    # Upload button (Gebruikt CSS hack om eruit te zien als 📷 knop)
-    uploaded_file = st.file_uploader("Cam", type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
+with col_main_buttons:
+    # Binnen de rechterkolom maken we weer 2 kolommetjes
+    # Op desktop staan deze naast de zoekbalk.
+    # Op mobiel komt 'col_main_buttons' onder 'col_main_search', maar de 2 knoppen blijven naast elkaar!
+    c_mic, c_cam = st.columns(2)
+    
+    with c_mic:
+        voice_text = speech_to_text(language=st.session_state.lang, start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='mic_recorder')
+    
+    with c_cam:
+        uploaded_file = st.file_uploader("Cam", type=['jpg', 'jpeg', 'png'], label_visibility="collapsed")
 
 # Logic: Voice update
 if voice_text and voice_text != st.session_state.search_query:
@@ -260,9 +258,9 @@ if image: st.image(image, width=200)
 
 st.markdown("---")
 
-# 3. SNELKOPPELINGEN (INKLAPBAAR)
+# 3. SNELKOPPELINGEN (STANDAARD UITGEKLAPT = True)
 vraag_van_knop = None
-with st.expander(txt['shortcuts_header'], expanded=False):
+with st.expander(txt['shortcuts_header'], expanded=True):
     knoppen = []
     knoppen.append((txt['btn_keys'], txt['q_keys']))
     if has_wifi: knoppen.append((txt['btn_wifi'], txt['q_wifi']))
